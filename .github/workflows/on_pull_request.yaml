@@ -58,7 +58,7 @@ jobs:
       - run: echo "🖥️ Running linting."
       - name: Run linting
         run: |
-          pdm run lint -v
+          pdm run lint --count -vvvvvvv 2>&1 |grep pyproject
       - run: echo "🍏 This linting job's status is ${{ job.status }}."
   test:
     runs-on: ${{ matrix.os }}
