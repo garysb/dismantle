@@ -58,7 +58,7 @@ jobs:
       - run: echo "🖥️ Running linting."
       - name: Run linting
         run: |
-          pdm run flake8 --version
+          pdm run lint -v
       - run: echo "🍏 This linting job's status is ${{ job.status }}."
   test:
     runs-on: ${{ matrix.os }}
