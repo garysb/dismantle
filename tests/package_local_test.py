@@ -1,10 +1,13 @@
+"""Test using packages stored on the local filesystem."""
 import os
-from py._path.local import LocalPath
+
 import pytest
+from py._path.local import LocalPath
+
 from dismantle.package import (
+    DirectoryPackageFormat,
     LocalPackageHandler,
     PackageHandler,
-    DirectoryPackageFormat,
     TarPackageFormat,
     TgzPackageFormat,
     ZipPackageFormat

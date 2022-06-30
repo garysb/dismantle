@@ -1,27 +1,25 @@
+"""Register plugin hooks."""
 import functools
 import logging
 from logging import NullHandler
-from . import _plugins
 
+from dismantle.plugin import _plugins
 
 log = logging.getLogger(__name__).addHandler(NullHandler())
 
 
 def register(name=None):
     """Register a function to add plugins to."""
-    log.debug('register: {}'.format(name))
     if not name:
         raise ValueError
 
-    def decorator(_func=None):
-        log.debug('register.decorator: {}'.format(_func))
+    def decorator(_func: functools._AnyCallable):
         _plugins[name] = {'original': _func}
         _plugins[name]['plugins'] = []
 
         @functools.wraps(_func)
         def caller(self, *args, **kwargs):
-            """ Execute the registered plugin in order of priority. """
-
+            """Execute the registered plugin in order of priority."""
             # store the previous result
             _plugins[name]['result'] = args[0]
 

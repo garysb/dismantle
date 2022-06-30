@@ -1,9 +1,10 @@
+"""Test loading extensions."""
 import sys
 from pathlib import Path
+
 from dismantle.extension import Extensions
 from dismantle.index import JsonFileIndexHandler
 from dismantle.package import LocalPackageHandler
-from py._path.local import LocalPath
 
 
 def test_success(datadir: Path) -> None:
@@ -11,12 +12,12 @@ def test_success(datadir: Path) -> None:
     from tests.GreetingExtension import GreetingExtension
 
     ext_types = [ColorExtension, GreetingExtension]
-    index_src = datadir.join('index.json')
-    index = JsonFileIndexHandler(index_src)
+    index_src = datadir / 'index.json'
+    index = JsonFileIndexHandler(str(index_src))
     packages = {}
     for pkg_meta in index:
         meta = index[pkg_meta]
-        path = datadir.join(meta['path'])
+        path = datadir / meta['path']
         package = LocalPackageHandler(meta['name'], path)
         package._meta = {**package._meta, **meta}
         package.install()
@@ -43,12 +44,12 @@ def test_in_sys_modules(datadir: Path) -> None:
     from tests.ColorExtension import ColorExtension
 
     ext_types = [ColorExtension]
-    index_src = datadir.join('index_in_sys_modules.json')
-    index = JsonFileIndexHandler(index_src)
+    index_src = datadir / 'index_in_sys_modules.json'
+    index = JsonFileIndexHandler(str(index_src))
     packages = {}
     for pkg_meta in index:
         meta = index[pkg_meta]
-        path = datadir.join(meta['path'])
+        path = datadir / meta['path']
         package = LocalPackageHandler(meta['name'], path)
         package._meta = {**package._meta, **meta}
         package.install()
@@ -97,9 +98,9 @@ def test_prefix_generation(datadir: Path) -> None:
     )
 
     assert [
-               '@scope-one/package-one.extension.hello',
-               '@scope-one/package-one.extension.green',
-               '@scope-one/package-one.extension.binpy.foo',
-               '@scope-one/package-one.extension.another',
-               '@scope-one/package-one.extension.lot.of.dot.you'
-           ].sort() == list(xpac._imports.keys()).sort()
+        '@scope-one/package-one.extension.hello',
+        '@scope-one/package-one.extension.green',
+        '@scope-one/package-one.extension.binpy.foo',
+        '@scope-one/package-one.extension.another',
+        '@scope-one/package-one.extension.lot.of.dot.you'
+    ].sort() == list(xpac._imports.keys()).sort()

@@ -4,7 +4,8 @@ import os
 import sys
 from contextlib import suppress
 from pathlib import Path
-from . import IExtension
+
+from dismantle.extension.iextension import IExtension
 
 
 class Extensions:
@@ -19,6 +20,7 @@ class Extensions:
         self._imports = {}
         self._exclude = (['__pycache__', '.git'])
         self._include = ('.py', '.cpython-37.pyc')
+
         # check that the types are a subclass of IExtension
         if not all([issubclass(i, IExtension) for i in types]):
             raise ValueError('all exntesion types must extend IExtension')
@@ -29,20 +31,23 @@ class Extensions:
         self._register()
 
     def _find(self) -> None:
-        """Search through the packages and find all extensions. """
+        """Search through the packages and find all extensions."""
         for package in self._packages.values():
             # check if the package has an init file
             with suppress(KeyError):
                 root, paths, _ = next(os.walk(package._path))
             # check if we have an extensions directory
             if self._directory in paths:
-                for root, dirs, files in os.walk(os.path.join(root, self._directory), topdown=True):
+                for root, dirs, files in os.walk(
+                    os.path.join(root, self._directory),
+                    topdown=True
+                ):
                     dirs[:] = [d for d in dirs if d not in self._exclude]
                     files[:] = [f for f in files if f.endswith(self._include)]
                     for name in files:
                         path = Path(root, name)
-                        # remove the last two prefixes (e.g .cpython-37.pyc)
-                        prefix = f'{package.name}.extension.{os.path.splitext(path.stem)[0]}'
+                        stem = os.path.splitext(path.stem)[0]
+                        prefix = f'{package.name}.extension.{stem}'
                         self._imports[prefix] = self._load(path, prefix)
                         self._imports[prefix].prefix = prefix
 
@@ -68,16 +73,20 @@ class Extensions:
                             self._extensions[subclass._category][name] = cls
 
     def category(self, category) -> list:
+        """Return the list of extensions for a category."""
         return self._extensions[category]
 
     @property
     def types(self) -> list:
+        """Return the list of supported types."""
         return list(self._extensions.keys())
 
     @property
     def extensions(self) -> dict:
+        """Return the full list of extensions."""
         return self._extensions
 
     @property
     def imports(self) -> dict:
+        """Return the fill list of imports."""
         return self._imports

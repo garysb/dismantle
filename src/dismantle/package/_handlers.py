@@ -1,3 +1,14 @@
+"""Provides the PackageHandler interface and two example handlers.
+
+Each package can be located in one of multiple locations. Packages can
+be located on a remote server, on the local filesystem, or any  other
+custom location.  In order to add a new custom location, the
+PackageHandler needs to be extended to handle the new custom location.
+
+Currently, two handlers are provided, one to handle packages stored on
+the local filesystem, and one to support packages located online and
+retrieved using a web request.
+"""
 import abc
 import atexit
 import json
@@ -6,41 +17,57 @@ import tempfile
 from hashlib import md5
 from json.decoder import JSONDecodeError
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 from urllib.parse import urlparse
-import requests
-from ._formats import DirectoryPackageFormat, PackageFormat, ZipPackageFormat
 
+import requests
+
+from dismantle.package._formats import (
+    DirectoryPackageFormat,
+    PackageFormat,
+    ZipPackageFormat
+)
 
 Formats = Optional[List[PackageFormat]]
 
 
 class PackageHandler(metaclass=abc.ABCMeta):
+    """Base PackageHandler interface.
+
+    The PackageHandler interface defines the structure expected for all
+    package handlers and should be extended to provide additional
+    custom package handler.
+    """
 
     @abc.abstractmethod
     def __getattr__(self, name) -> object:
+        """Allow the __getattr__ method to be extended."""
         ...
 
     @property
     @abc.abstractmethod
     def name(self) -> str:
+        """Return a string containing the name of the package."""
         ...
 
     @property
     @abc.abstractmethod
     def installed(self) -> bool:
+        """Return a boolean if the package has been installed."""
         ...
 
     @staticmethod
     @abc.abstractmethod
-    def grasps(path: any) -> bool:
-        """Return a boolean value describing weither the package source can be
-        processed.
-        """
+    def grasps(path: Union[str, Path]) -> bool:
+        """Check if package handler understand a package format."""
         ...
 
     @abc.abstractmethod
-    def install(self, path: str, version: str = None) -> bool:
+    def install(
+        self,
+        path: Union[str, Path],
+        version: Optional[str] = None
+    ) -> bool:
         """Install a specific package version."""
         ...
 
@@ -58,8 +85,13 @@ class PackageHandler(metaclass=abc.ABCMeta):
 class LocalPackageHandler(PackageHandler):
     """Directory package structure."""
 
-    def __init__(self, name: str, src: str, formats: Optional[Formats] = None):
-        """initialise the package."""
+    def __init__(
+        self,
+        name: str,
+        src: Union[str, Path],
+        formats: Optional[Formats] = None
+    ) -> None:
+        """Initialise the package."""
         self._meta = {}
         self._meta['name'] = name
         self._path = None
@@ -83,10 +115,13 @@ class LocalPackageHandler(PackageHandler):
     @property
     def path(self) -> str:
         """Return the path the package is installed into."""
-        return self._path
+        return str(self._path)
 
     def __getattr__(self, name):
-        """Return an attribute from the meta data if the data doesnt exist."""
+        """Return metadata.
+
+        Return an attribute from the meta data if the data doesnt exist.
+        """
         if name not in self._meta:
             message = f'{name} is an invalid attribute'
             raise AttributeError(message)
@@ -98,14 +133,26 @@ class LocalPackageHandler(PackageHandler):
         return self._installed
 
     @staticmethod
-    def grasps(path: any) -> bool:
-        """Check if a directory on the local filesystem has been provided."""
-        path = str(path)[7:] if str(path)[:7] == 'file://' else path
-        return Path(str(path)).exists()
+    def grasps(path: Union[str, Path]) -> bool:
+        """Check if the package format can process.
 
-    def install(self, path: str = None, version: str = None) -> bool:
-        """The local package handler does not install the package. No version
-        control exists for the directory package type.
+        Check if a directory on the local filesystem has been provided.
+        """
+        path = str(path)[7:] if str(path)[:7] == 'file://' else path
+        try:
+            return Path(str(path)).exists()
+        except OSError:
+            return False
+
+    def install(
+        self,
+        path: Optional[str] = None,
+        version: Optional[str] = None
+    ) -> bool:
+        """Install a package.
+
+        The local package handler does not install the package. No
+        version control exists for the directory package type.
         """
         path = str(path)[7:] if str(path)[:7] == 'file://' else path
         self._path = path if path else self._src
@@ -117,19 +164,19 @@ class LocalPackageHandler(PackageHandler):
     def uninstall(self) -> bool:
         """Uninstall the package."""
         if self._path != self._src:
-            self._remove_files(self._path)
+            self._remove_files(Path(self._path or ''))
         self._path = None
         self._installed = False
         return True
 
-    def verify(self, digest: str = None) -> bool:
+    def verify(self, digest: Optional[str] = None) -> bool:
         """Verify the package hasn't been tampered with."""
         if digest is None:
             return True
         message = 'the local package handler does not support verification'
         raise ValueError(message)
 
-    def _load_metadata(self, path: Path):
+    def _load_metadata(self, path: Union[str, Path]):
         """Load the package.json file into memory."""
         path = Path(str(path)[7:] if str(path)[:7] == 'file://' else path)
         try:
@@ -150,7 +197,7 @@ class LocalPackageHandler(PackageHandler):
             raise ValueError(message)
 
     @staticmethod
-    def _remove_files(path: Path) -> None:
+    def _remove_files(path: Union[str, Path]) -> None:
         """Recursively remove the path and all its sub items."""
         path = str(path)[7:] if str(path)[:7] == 'file://' else path
         try:
@@ -165,24 +212,26 @@ class HttpPackageHandler(PackageHandler):
     def __init__(
         self,
         name: str,
-        src: str,
+        src: Union[str, Path],
         formats: Formats = None,
-        cache_dir: str = None
+        cache_dir: Optional[Union[str, Path]] = None
     ):
-        """initialise the package."""
+        """Initialise the package."""
         self._meta = {}
         self._meta['name'] = name
         self._path = None
         self._installed = False
         self._updated = False
         self._src = src
+        cache_dir = Path(cache_dir or '')
+
         if not cache_dir:
             tmp_cache = tempfile.TemporaryDirectory()
             cache_dir = Path(tmp_cache.name)
             atexit.register(tmp_cache.cleanup)
         else:
             cache_dir.mkdir(0x777, True, True)
-        parts = urlparse(src)
+        parts = urlparse(str(src))
         ext = ''.join(Path(parts.path).suffixes)
         self._cache = Path(cache_dir / Path(name + ext))
         if not HttpPackageHandler.grasps(src):
@@ -204,7 +253,7 @@ class HttpPackageHandler(PackageHandler):
         return self.meta['name']
 
     def __getattr__(self, name):
-        """Return an attribute from the meta data if the data doesnt exist."""
+        """Return attrib from meta data if the data doesnt exist."""
         if name not in self._meta:
             message = f'{name} is an invalid attribute'
             raise AttributeError(message)
@@ -216,8 +265,8 @@ class HttpPackageHandler(PackageHandler):
         return self._installed
 
     @staticmethod
-    def grasps(path: any) -> bool:
-        """Check if a directory on the local filesystem has been provided."""
+    def grasps(path: Union[str, Path]) -> bool:
+        """Check if dir on the local filesystem has been provided."""
         parts = urlparse(str(path))
         if parts.scheme not in ['http', 'https']:
             return False
@@ -225,7 +274,11 @@ class HttpPackageHandler(PackageHandler):
 
     def _fetch_and_extract(self):
         headers = {'If-None-Match': self._digest}
-        req = requests.get(self._src, headers=headers, allow_redirects=True)
+        req = requests.get(
+            str(self._src),
+            headers=headers,
+            allow_redirects=True
+        )
         if req.status_code not in [200, 304]:
             raise FileNotFoundError(req.status_code)
         elif req.status_code == 200:
@@ -233,14 +286,14 @@ class HttpPackageHandler(PackageHandler):
             with open(self._cache, 'wb') as cached_package:
                 cached_package.write(req.content)
             self._updated = True
-        self._format.extract(self._cache, self._path)
+        self._format.extract(self._cache, self._path or '')
 
-    def install(self, path: str, version: str = None) -> bool:
-        """
-        Install the current package to the given path.
-        if there's already a package in path we'll only fetch if the version is different.
-        """
+    def install(self, path: str, version: Optional[str] = None) -> bool:
+        """Install the current package to the given path.
 
+        If there's already a package in path we'll only fetch if the
+        version is different.
+        """
         fetch_required = True
         try:
             existing_pkg_metadata = self._load_metadata(Path(path))
@@ -269,12 +322,12 @@ class HttpPackageHandler(PackageHandler):
     def uninstall(self) -> bool:
         """Uninstall the package."""
         if self._path != self._src:
-            self._remove_files(self._path)
+            self._remove_files(Path(self._path or ''))
         self._path = None
         self._installed = False
         return True
 
-    def verify(self, digest: str = None) -> bool:
+    def verify(self, digest: Optional[str] = None) -> bool:
         """Verify the package hasn't been tampered with."""
         if digest is None:
             return True
@@ -310,16 +363,22 @@ class HttpPackageHandler(PackageHandler):
 
     @property
     def outdated(self) -> bool:
-        """Execute a head request using the requests library to check that the
-        ETag matches.
+        """Execute a head request using the requests library.
+
+        To check that the ETag matches.
         """
         headers = {'If-None-Match': self._digest}
-        req = requests.head(self._src, headers=headers, allow_redirects=True)
+        req = requests.head(
+            str(self._src or ''),
+            headers=headers,
+            allow_redirects=True
+        )
+
         if req.status_code not in [200, 304]:
             raise FileNotFoundError(req.status_code)
         elif req.status_code == 200:
             return True
-        elif req.status_code == 304:
+        else:
             return False
 
     @property
@@ -328,7 +387,7 @@ class HttpPackageHandler(PackageHandler):
         digest = md5()  # noqa: S303
         if not self._cache.exists():
             return digest.hexdigest()
-        with open(self._cache, "rb") as cached_package:
-            for block in iter(lambda: cached_package.read(65536), b""):
+        with open(self._cache, 'rb') as cached_package:
+            for block in iter(lambda: cached_package.read(65536), b''):
                 digest.update(block)
         return digest.hexdigest()
