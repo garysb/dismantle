@@ -31,6 +31,15 @@ classifiers = [
 [project.scripts]
 dismantle = "dismantle.cli:main"
 
+[tool.pdm.scripts]
+lint = { cmd = "pdm run flake8 src tests" }
+test = { cmd = "pytest tests" }
+pre_document = { cmd = "sphinx-apidoc -f -o docs/src src/dismantle/" }
+document = { cmd = "sphinx-build docs/src docs/build" }
+confluence = { cmd = "sphinx-build -b confluence docs/src docs/build -E -a" }
+pre_coverage = { cmd = "pytest tests -qq --cov=dismantle --cov-report=xml" }
+coverage = { cmd = "coverage report" }
+
 [tool.flake8]
 max-line-length = 79
 max-doc-length = 72
@@ -115,15 +124,6 @@ myst_enable_extensions = [
 
 [tool.pdm]
 version = { from = "src/dismantle/__version__.py" }
-
-[tool.pdm.scripts]
-lint = { cmd = "flake8 src tests" }
-test = { cmd = "pytest tests" }
-pre_document = { cmd = "sphinx-apidoc -f -o docs/src src/dismantle/" }
-document = { cmd = "sphinx-build docs/src docs/build" }
-confluence = { cmd = "sphinx-build -b confluence docs/src docs/build -E -a" }
-pre_coverage = { cmd = "pytest tests -qq --cov=dismantle --cov-report=xml" }
-coverage = { cmd = "coverage report" }
 
 [tool.pdm.dev-dependencies]
 test = ["pytest>=7.1.2", "pytest-cov>=3.0.0", "pytest-httpserver>=1.0.4"]
